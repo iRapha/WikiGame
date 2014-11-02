@@ -1,0 +1,11 @@
+{
+    "name": "WikiGame",
+    "description": "Intelligent Wikipedia Game",
+    "version": "0.0.1",
+    "dependencies": {
+        "body-parser": "*",
+        "express": "4.x",
+        "express-session": "*",
+        "async": "*"
+    }
+}

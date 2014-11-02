@@ -2,6 +2,10 @@ var wiki = require('./wiki.min.js');
 var express = require("express");
 var app = express();
 var bodyParser = require("body-parser");
+var visitedPages = {};
+var async = require("async");
+
+var standartDepth = 6;
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
@@ -9,22 +13,84 @@ app.use(bodyParser.json());
 app.listen(process.env.PORT || 3000);
 
 app.get("/", function (req, res) {
-    
-});
+    getPageRelatedTo("dog", function(err, firstPage) {
+        getPageRelatedTo("star wars", function(err, secondPage) {
 
-wiki.search('dog', 25, function(err, results, suggestion) {
-    results.append(suggestion); //so it has a chance of being picked.
-    console.log(results + "\n");
+            visitAllLinks("Afghan National Anthem", function() {
+                res.status(200).send(JSON.stringify(visitedPages));
+            });
 
-    var i = Math.floor((Math.random()*26) + 1);
-    // using results[i]
-
-    wiki.page(results[i], function(err, page) {
-        console.log(page);
+        });
     });
 });
 
+function getPageLinks(page, cb) {
+    page.links(function(err, links) {
+        cb(err, links);
+    });
+}
 
+function visitAllLinks(pageName, cb, depth) {
+    if(!depth) {
+        depth = standartDepth;
+    }
+
+    console.log("PAGE = " + pageName + " DEPTH = " + depth);
+
+    if(visitedPages[pageName]) {
+        console.log("VISITED PAGE: " + pageName + " CURRENT DEPTH: " + visitedPages[pageName].depth);
+
+        if(visitedPages[pageName].depth > (standartDepth - depth)) {
+            console.log("NEW DEPTH FOR " + pageName + " FROM " + visitedPages[pageName].depth + " TO " + (6 - depth));
+            visitedPages[pageName].depth = standartDepth - depth;
+        } else {
+            console.log("returning");
+            return;
+        }
+    }
+
+    visitPage(pageName, function(err, page) {
+        visitedPages[pageName] = {
+            "page": page,
+            "depth": standartDepth + 1 - depth
+        };
+
+        console.log("VISITING: " + visitedPages[pageName].title + " DEPTH " + visitedPages[pageName].depth);
+
+        getPageLinks(page, function (err, links) {
+            if(depth > 0) {
+                iteratorArray = [];
+
+                for(var i = 0; i < links.length; i++) {
+                    iteratorArray.push(visitAllLinks(links[i], null, (depth - 1)));
+                }
+
+                if(depth === standartDepth) {
+                    iteratorArray.push(cb);
+                }
+                async.series(iteratorArray);
+            }
+        });
+    });
+}
+
+function visitPage(pageName, cb) {
+    wiki.page(pageName, function(err, page) {
+        cb(err, page);
+    });
+}
+
+function getPageRelatedTo(query, cb) {
+    wiki.search(query, 25, function(err, results, suggestion) {
+        var i = Math.floor((Math.random()*26) + 1);
+        wiki.page(results[i], function(err, page) {
+            if(err) {
+                console.log("ERROR: " + err);
+            }
+            cb(err, page);
+        });
+    });
+}
 
 
 
@@ -34,6 +100,7 @@ Usage
 Load in library
 
 var Wiki = require("wikijs");
+
 Search Wikipedia for articles
 
 /**
@@ -45,6 +112,7 @@ Search Wikipedia for articles
 Wiki.search("joker comics", 3, function(err, results){
     // results = ['Joker (comics)', 'Joker (comic book)', 'DC Comics']
 });
+
 Obtain random articles
 
 /**
@@ -54,6 +122,7 @@ Obtain random articles
 Wiki.random(function(err, results){
     // results = ['Star Wars']
 });
+
 Get page from article title
 
 /**
@@ -64,6 +133,7 @@ Get page from article title
 Wiki.page("Batman", function(err, page){
     // page = WikiPage object for 'Batman' article
 });
+
 Search for articles by geographical coordinates
 
 /**
@@ -75,6 +145,7 @@ Search for articles by geographical coordinates
 Wiki.geoSearch(36.109,-115.178, function(err, results){
     // results = ['Las Vegas']
 });
+
 Page methods
 
 page.html(function(err, html){
