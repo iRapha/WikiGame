@@ -3,7 +3,7 @@ var express = require("express");
 var app = express();
 var bodyParser = require("body-parser");
 var visitedPages = {};
-var async = require("async");
+var after = require("after");
 
 var standartDepth = 6;
 
@@ -16,7 +16,8 @@ app.get("/", function (req, res) {
     getPageRelatedTo("dog", function(err, firstPage) {
         getPageRelatedTo("star wars", function(err, secondPage) {
 
-            visitAllLinks("Afghan National Anthem", function() {
+
+            visitAllLinks("Cat", function() {
                 res.status(200).send(JSON.stringify(visitedPages));
             });
 
@@ -26,6 +27,9 @@ app.get("/", function (req, res) {
 
 function getPageLinks(page, cb) {
     page.links(function(err, links) {
+        if(err || !links) {
+            console.log("ERROR 1: " + JSON.stringify(err));
+        }
         cb(err, links);
     });
 }
@@ -35,40 +39,51 @@ function visitAllLinks(pageName, cb, depth) {
         depth = standartDepth;
     }
 
-    console.log("PAGE = " + pageName + " DEPTH = " + depth);
+    console.log("PAGE = " + pageName + "\t\t\t DEPTH = " + (standartDepth - depth));
 
     if(visitedPages[pageName]) {
-        console.log("VISITED PAGE: " + pageName + " CURRENT DEPTH: " + visitedPages[pageName].depth);
+        console.log("VISITED PAGE: " + pageName + "\t\t CURRENT DEPTH: " + visitedPages[pageName].depth);
 
         if(visitedPages[pageName].depth > (standartDepth - depth)) {
-            console.log("NEW DEPTH FOR " + pageName + " FROM " + visitedPages[pageName].depth + " TO " + (6 - depth));
+            console.log("NEW DEPTH FOR " + pageName + "\t\t FROM " + visitedPages[pageName].depth + " TO " + (standartDepth - depth));
             visitedPages[pageName].depth = standartDepth - depth;
         } else {
             console.log("returning");
+            cb();
             return;
         }
     }
 
     visitPage(pageName, function(err, page) {
+        if(err || !page) {
+            console.log("ERROR 2: " + JSON.stringify(err));
+            cb();
+            return;
+        }
+
         visitedPages[pageName] = {
             "page": page,
-            "depth": standartDepth + 1 - depth
+            "depth": standartDepth - depth
         };
 
-        console.log("VISITING: " + visitedPages[pageName].title + " DEPTH " + visitedPages[pageName].depth);
+        console.log("VISITING: " + pageName + "\t\t\t DEPTH " + visitedPages[pageName].depth);
 
-        getPageLinks(page, function (err, links) {
+        getPageLinks(page, function(err, links) {
+            if(err || !links) {
+                console.log("ERROR 3: " + JSON.stringify(err));
+                cb();
+                return;
+            }
+
             if(depth > 0) {
-                iteratorArray = [];
-
+                next = after(links.length, cb);
                 for(var i = 0; i < links.length; i++) {
-                    iteratorArray.push(visitAllLinks(links[i], null, (depth - 1)));
+                    console.log("VISITING ALL LINKS IN THE PAGE OF NAME: " + links[i]);
+                    visitAllLinks(links[i], next, (depth - 1));
                 }
-
-                if(depth === standartDepth) {
-                    iteratorArray.push(cb);
-                }
-                async.series(iteratorArray);
+            }else {
+                console.log("#######   ########   ########\t\t\t\t\t\t\tCALLBACK BEING CALLED");
+                cb();
             }
         });
     });
@@ -84,8 +99,8 @@ function getPageRelatedTo(query, cb) {
     wiki.search(query, 25, function(err, results, suggestion) {
         var i = Math.floor((Math.random()*26) + 1);
         wiki.page(results[i], function(err, page) {
-            if(err) {
-                console.log("ERROR: " + err);
+            if(err || !page) {
+                console.log("ERROR 4: " + JSON.stringify(err));
             }
             cb(err, page);
         });
